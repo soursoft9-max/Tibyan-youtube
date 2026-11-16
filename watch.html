@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#123f35">
+  <meta name="description" content="تِبيان — منصة الاستماع إلى التلاوات القرآنية ومشاركتها، وكل تلاوة تُراجع قبل نشرها.">
+  <title>مشاهدة | تِبيان</title>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("tibyan-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e){}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tibyan.css">
+</head>
+<body>
+  <header class="masthead" id="masthead"></header>
+  <nav class="guide" id="guide" aria-label="القائمة الجانبية"></nav>
+  <main class="page" id="page">
+
+    <div class="watch">
+      <div class="primary">
+        <div class="preview-note" id="preview" hidden></div>
+        <div class="player" id="player"><div class="player-msg">جارٍ تجهيز التلاوة...</div></div>
+        <h1 class="watch-title" id="title"></h1>
+
+        <div class="owner-row" id="owner-row" hidden>
+          <div class="owner" id="owner"></div>
+          <div class="watch-actions">
+            <button class="btn like-btn" id="like" type="button" aria-pressed="false"></button>
+            <button class="btn" id="share" type="button"></button>
+            <button class="btn" id="save" type="button"></button>
+          </div>
+        </div>
+
+        <div class="desc-box" id="desc" hidden></div>
+        <section class="comments" id="comments" hidden></section>
+      </div>
+
+      <aside class="upnext">
+        <div class="card" id="playlist-box" hidden style="padding:14px"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <h3 style="margin:0">التالي</h3>
+          <label style="display:flex;gap:6px;align-items:center;font-size:13px;color:var(--text-2);cursor:pointer">
+            تشغيل تلقائي <input type="checkbox" id="autoplay" style="accent-color:#123f35;width:18px;height:18px">
+          </label>
+        </div>
+        <div class="vlist" id="upnext"></div>
+      </aside>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="tibyan.js"></script>
+  <script>
+  "use strict";
+
+  const T = window.Tibyan;
+  const $ = id => document.getElementById(id);
+  const params = new URLSearchParams(location.search);
+  const videoId = (params.get("v") || params.get("id") || "").trim();
+  const listId = params.get("list");
+
+  let video = null;
+  let ws = null;
+  let me = null;
+  let nextVideos = [];
+  let playlistItems = [];
+  let viewRecorded = false;
+  let commentSort = "new";
+  let comments = [];
+
+  $("autoplay").checked = localStorage.getItem("tibyan-autoplay") !== "0";
+  $("autoplay").addEventListener("change", e => localStorage.setItem("tibyan-autoplay", e.target.checked ? "1" : "0"));
+
+  function playerMessage(text) {
+    $("player").innerHTML = `<div class="player-msg">${T.esc(text)}</div>`;
+  }
+
+  /* ---------- المشغّل ---------- */
+  function recordViewLater() {
+    if (viewRecorded || !video || video.status !== "published") return;
+    viewRecorded = true;
+    setTimeout(() => {
+      T.client.rpc("record_view", { p_video_id: String(video.id) }).then(({ error }) => {
+        if (error) console.warn("record_view", error.message);
+      });
+    }, 5000);
+  }
+
+  function attachMediaEvents(media) {
+    const key = "tibyan-pos-" + video.id;
+    media.addEventListener("loadedmetadata", () => {
+      const saved = Number(localStorage.getItem(key) || 0);
+      if (saved > 10 && saved < media.duration - 10) {
+        media.currentTime = saved;
+        T.toast("استئناف من " + T.formatDuration(saved));
+      }
+    });
+    let last = 0;
+    media.addEventListener("timeupdate", () => {
+      if (Math.abs(media.currentTime - last) < 5) return;
+      last = media.currentTime;
+      localStorage.setItem(key, String(Math.floor(media.currentTime)));
+      if (media.duration) localStorage.setItem(key + "-p", String(Math.round(media.currentTime / media.duration * 100)));
+    });
+    media.addEventListener("play", () => { $("player").classList.add("playing"); recordViewLater(); });
+    media.addEventListener("pause", () => $("player").classList.remove("playing"));
+    media.addEventListener("ended", () => {
+      localStorage.removeItem(key);
+      localStorage.setItem(key + "-p", "100");
+      $("player").classList.remove("playing");
+      playNext();
+    });
+    media.addEventListener("error", () => T.toast("تعذّر تشغيل الملف."));
+  }
+
+  async function mountPlayer() {
+    const yt = T.getYouTubeId(video.video_url);
+    if (yt) {
+      $("player").innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${T.esc(yt)}?autoplay=1" title="${T.esc(video.title)}"
+        allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+      recordViewLater();
+      return;
+    }
+
+    const path = T.storagePath(video.video_url);
+    let url = "";
+    if (path) url = await T.signedUrl(path, 60 * 60 * 4);
+    else if (T.isHttpUrl(video.video_url || "")) url = video.video_url;
+    if (!url) {
+      playerMessage("تعذّر تجهيز ملف التلاوة.");
+      return;
+    }
+
+    const audio = T.isAudioPath(path || url);
+    if (audio) {
+      const thumbs = await T.resolveThumbnails([video]);
+      const img = thumbs.get(String(video.id));
+      $("player").innerHTML = (img ? `<img src="${T.esc(img)}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:brightness(.55)">` : T.artHTML(video))
+        + `<div class="audio-bar"><span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+             <audio controls autoplay preload="metadata"></audio></div>`;
+      const el = $("player").querySelector("audio");
+      el.src = url;
+      attachMediaEvents(el);
+    } else {
+      $("player").innerHTML = `<video controls autoplay playsinline preload="metadata"></video>`;
+      const el = $("player").querySelector("video");
+      el.src = url;
+      attachMediaEvents(el);
+    }
+  }
+
+  function playNext() {
+    if (listId && playlistItems.length) {
+      const i = playlistItems.findIndex(v => String(v.id) === String(video.id));
+      const next = playlistItems[i + 1];
+      if (next) { location.href = T.watchUrl(next, "&list=" + encodeURIComponent(listId)); return; }
+    }
+    if ($("autoplay").checked && nextVideos[0]) {
+      T.toast("التالي: " + nextVideos[0].title);
+      setTimeout(() => { location.href = T.watchUrl(nextVideos[0]); }, 1500);
+    }
+  }
+
+  /* ---------- القناة والإجراءات ---------- */
+  async function renderOwner() {
+    const ch = ws && ws.channel;
+    $("owner-row").hidden = false;
+
+    if (ch) {
+      const avatar = (await T.resolveImages([ch.avatar_url])).get(ch.avatar_url) || "";
+      const href = T.channelUrl(ch);
+      let btn = "";
+      if (ch.is_mine) btn = `<a class="btn" href="studio.html">إدارة التلاوات</a>`;
+      else btn = `<button class="btn primary subscribe-btn ${ch.subscribed ? "subscribed" : ""}" id="subscribe" type="button">${ch.subscribed ? "مشترك ✓" : "اشترك"}</button>`;
+      $("owner").innerHTML = `
+        <a href="${T.esc(href)}">${T.avatarHTML(ch.name, avatar, "md")}</a>
+        <div><a class="owner-name" href="${T.esc(href)}">${T.esc(ch.name)}</a>${T.VERIFIED}
+          <div class="owner-subs" id="subs-count">${T.formatSubs(ch.subscribers)}</div></div>
+        ${btn}`;
+      const sub = $("subscribe");
+      if (sub) sub.addEventListener("click", toggleSubscribe);
+    } else {
+      $("owner").innerHTML = `${T.avatarHTML("تِبيان", "", "md")}<div><span class="owner-name">تِبيان</span></div>`;
+    }
+
+    renderLike();
+    $("share").innerHTML = T.icon("share") + "مشاركة";
+    $("save").innerHTML = T.icon("save") + "حفظ";
+    const published = video.status === "published";
+    $("like").disabled = $("save").disabled = !published;
+  }
+
+  function renderLike() {
+    const liked = ws && ws.liked;
+    $("like").classList.toggle("liked", !!liked);
+    $("like").setAttribute("aria-pressed", liked ? "true" : "false");
+    $("like").innerHTML = T.icon("like") + `<span>${ws && ws.likes ? T.formatCount(ws.likes) : "أعجبني"}</span>`;
+  }
+
+  async function toggleLike() {
+    if (!me) return T.goLogin("سجّل الدخول لتسجيل إعجابك بالتلاوة.");
+    const liked = ws.liked;
+    ws.liked = !liked;
+    ws.likes += liked ? -1 : 1;
+    renderLike();
+    const q = liked
+      ? T.client.from("video_likes").delete().eq("video_id", video.id).eq("user_id", me.id)
+      : T.client.from("video_likes").insert({ video_id: video.id, user_id: me.id });
+    const { error } = await q;
+    if (error) {
+      ws.liked = liked;
+      ws.likes += liked ? 1 : -1;
+      renderLike();
+      T.toast(T.friendlyError(error));
+    } else if (!liked) T.toast("أُضيفت إلى «التلاوات التي أعجبتني»");
+  }
+
+  async function toggleSubscribe() {
+    if (!me) return T.goLogin("سجّل الدخول للاشتراك في القناة.");
+    const ch = ws.channel;
+    const was = ch.subscribed;
+    const q = was
+      ? T.client.from("subscriptions").delete().eq("user_id", me.id).eq("channel_id", ch.id)
+      : T.client.from("subscriptions").insert({ user_id: me.id, channel_id: ch.id });
+    const { error } = await q;
+    if (error) return T.toast(T.friendlyError(error));
+    ch.subscribed = !was;
+    ch.subscribers += was ? -1 : 1;
+    const btn = $("subscribe");
+    btn.classList.toggle("subscribed", ch.subscribed);
+    btn.textContent = ch.subscribed ? "مشترك ✓" : "اشترك";
+    $("subs-count").textContent = T.formatSubs(ch.subscribers);
+    T.toast(ch.subscribed ? "تم الاشتراك في " + ch.name : "أُلغي الاشتراك");
+  }
+
+  /* ---------- الوصف ---------- */
+  function renderDescription() {
+    const views = new Intl.NumberFormat("ar-u-nu-latn").format(video.view_count || 0);
+    const tags = [];
+    if (video.category) tags.push(`<a class="tag" href="index.html?c=${encodeURIComponent(video.category)}">#${T.esc(T.categoryLabel(video.category).replace(/\s+/g, "_"))}</a>`);
+    if (video.reader_name) tags.push(`<a class="tag" href="results.html?q=${encodeURIComponent(video.reader_name)}">#${T.esc(video.reader_name.replace(/\s+/g, "_"))}</a>`);
+
+    $("desc").hidden = false;
+    $("desc").innerHTML = `
+      <div class="desc-meta">${views} مشاهدة<span style="margin:0 6px">•</span>${T.esc(T.formatDate(video.published_at || video.created_at))} ${tags.join(" ")}</div>
+      ${video.reader_name ? `<div style="margin-top:4px">القارئ: <strong>${T.esc(video.reader_name)}</strong></div>` : ""}
+      <div class="desc-text">${T.esc(video.description || "")}</div>
+      ${(video.description || "").length > 120 ? `<span class="more" id="desc-more">المزيد</span>` : ""}`;
+    $("desc").onclick = e => {
+      if ($("desc").classList.contains("open") && e.target.id !== "desc-more") return;
+      const open = $("desc").classList.toggle("open");
+      const more = $("desc-more");
+      if (more) more.textContent = open ? "عرض أقل" : "المزيد";
+    };
+  }
+
+  /* ---------- التعليقات ---------- */
+  async function loadComments() {
+    const { data, error } = await T.client.rpc("get_comments", { p_video_id: String(video.id) });
+    if (error) {
+      $("comments").innerHTML = T.emptyHTML("تعذّر تحميل التعليقات", T.friendlyError(error));
+      return;
+    }
+    comments = data || [];
+    const avatars = await T.resolveImages(comments.map(c => c.author_avatar));
+    comments.forEach(c => { c.avatar = avatars.get(c.author_avatar) || ""; });
+    renderComments();
+  }
+
+  function commentHTML(c, isReply) {
+    const author = c.author_channel_id
+      ? `<a href="channel.html?id=${encodeURIComponent(c.author_channel_id)}">${T.esc(c.author_name)}</a>`
+      : T.esc(c.author_name);
+    return `<div class="comment" data-id="${c.id}">
+      ${T.avatarHTML(c.author_name, c.avatar, isReply ? "sm" : "md")}
+      <div class="comment-body">
+        <div class="comment-author">${c.is_creator ? `<span class="creator">${author} ✓</span>` : author}<time>${T.esc(T.timeAgo(c.created_at))}</time></div>
+        <div class="comment-text">${T.esc(c.body)}</div>
+        <div class="comment-tools">
+          ${video.status === "published" ? `<button class="btn ghost" type="button" data-reply="${isReply ? c.parent_id : c.id}">${T.icon("reply")}ردّ</button>` : ""}
+          ${c.can_delete ? `<button class="btn ghost" type="button" data-delete="${c.id}">${T.icon("trash")}حذف</button>` : ""}
+        </div>
+        ${isReply ? "" : `<div class="reply-slot"></div><div class="replies">${
+          comments.filter(r => r.parent_id === c.id)
+            .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+            .map(r => commentHTML(r, true)).join("")}</div>`}
+      </div>
+    </div>`;
+  }
+
+  function formHTML(placeholder, parentId) {
+    const name = T.state.myChannel ? T.state.myChannel.channel_name : (me ? me.email : "");
+    return `<form class="comment-form" data-parent="${parentId || ""}">
+      ${T.avatarHTML(name, T.state.myChannel && T.state.myChannel.avatar, parentId ? "sm" : "md")}
+      <div class="field">
+        <textarea rows="1" maxlength="2000" placeholder="${placeholder}" required></textarea>
+        <div class="form-actions" ${parentId ? "" : "hidden"}>
+          <button class="btn ghost" type="button" data-cancel>إلغاء</button>
+          <button class="btn brand" type="submit">${parentId ? "ردّ" : "تعليق"}</button>
+        </div>
+      </div>
+    </form>`;
+  }
+
+  function renderComments() {
+    const top = comments.filter(c => !c.parent_id)
+      .sort((a, b) => commentSort === "new"
+        ? new Date(b.created_at) - new Date(a.created_at)
+        : new Date(a.created_at) - new Date(b.created_at));
+
+    const published = video.status === "published";
+    let form = "";
+    if (!published) form = `<p class="muted">التعليقات متاحة بعد نشر التلاوة.</p>`;
+    else if (me) form = formHTML("أضف تعليقًا طيبًا…");
+    else form = `<p class="muted"><a href="${T.esc(T.loginUrl())}" style="color:var(--gold-ink);font-weight:700">سجّل الدخول</a> لإضافة تعليق.</p>`;
+
+    $("comments").hidden = false;
+    $("comments").innerHTML = `
+      <div class="comments-head">${T.formatCount(comments.length)} تعليق
+        <button class="btn ghost" type="button" id="comment-sort">${T.icon("sort")}${commentSort === "new" ? "الأحدث أولًا" : "الأقدم أولًا"}</button>
+      </div>
+      ${form}
+      <div id="comment-list">${top.map(c => commentHTML(c, false)).join("") ||
+        (published ? `<p class="muted">لا توجد تعليقات بعد. كن أول من يعلّق.</p>` : "")}</div>`;
+  }
+
+  async function submitComment(form) {
+    const textarea = form.querySelector("textarea");
+    const body = textarea.value.trim();
+    if (!body) return;
+    const parent = form.dataset.parent ? Number(form.dataset.parent) : null;
+    form.querySelector('[type="submit"]').disabled = true;
+    const { error } = await T.client.from("comments").insert({
+      video_id: video.id, user_id: me.id, body, parent_id: parent
+    });
+    if (error) {
+      T.toast("تعذّر إرسال التعليق: " + T.friendlyError(error));
+      form.querySelector('[type="submit"]').disabled = false;
+      return;
+    }
+    ws.comments += 1;
+    await loadComments();
+  }
+
+  $("comments").addEventListener("focusin", e => {
+    if (e.target.matches(".comment-form textarea")) {
+      e.target.closest("form").querySelector(".form-actions").hidden = false;
+    }
+  });
+  $("comments").addEventListener("input", e => {
+    if (e.target.matches("textarea")) {
+      e.target.style.height = "auto";
+      e.target.style.height = e.target.scrollHeight + "px";
+    }
+  });
+  $("comments").addEventListener("submit", e => {
+    e.preventDefault();
+    submitComment(e.target);
+  });
+  $("comments").addEventListener("click", async e => {
+    if (e.target.closest("#comment-sort")) {
+      commentSort = commentSort === "new" ? "old" : "new";
+      renderComments();
+      return;
+    }
+    const cancel = e.target.closest("[data-cancel]");
+    if (cancel) {
+      const form = cancel.closest("form");
+      if (form.dataset.parent) form.remove();
+      else { form.reset(); form.querySelector(".form-actions").hidden = true; }
+      return;
+    }
+    const reply = e.target.closest("[data-reply]");
+    if (reply) {
+      if (!me) return T.goLogin("سجّل الدخول للرد على التعليقات.");
+      const top = $("comments").querySelector(`.comment[data-id="${reply.dataset.reply}"] .reply-slot`);
+      if (top && !top.firstChild) {
+        top.innerHTML = formHTML("أضف ردًّا…", reply.dataset.reply);
+        top.querySelector("textarea").focus();
+      }
+      return;
+    }
+    const del = e.target.closest("[data-delete]");
+    if (del) {
+      if (!confirm("حذف هذا التعليق؟")) return;
+      const { error } = await T.client.from("comments").delete().eq("id", del.dataset.delete);
+      if (error) return T.toast(T.friendlyError(error));
+      T.toast("حُذف التعليق");
+      await loadComments();
+    }
+  });
+
+  /* ---------- التالي وقائمة التشغيل ---------- */
+  async function loadUpNext() {
+    try {
+      const [same, popular] = await Promise.all([
+        video.category ? T.fetchVideos({ categories: [video.category], excludeId: video.id, limit: 12, order: "popular" }) : [],
+        T.fetchVideos({ excludeId: video.id, limit: 20, order: "popular" })
+      ]);
+      const seen = new Set();
+      nextVideos = [...same, ...popular].filter(v => !seen.has(v.id) && seen.add(v.id)).slice(0, 18);
+      await T.renderVideos($("upnext"), nextVideos, { layout: "compact", emptyTitle: "لا توجد تلاوات أخرى بعد" });
+    } catch (error) {
+      console.warn(error);
+    }
+  }
+
+  async function loadPlaylist() {
+    if (!listId) return;
+    const { data: pl } = await T.client.from("playlists").select("id,title,user_id,is_public").eq("id", listId).maybeSingle();
+    if (!pl) return;
+    const { data: items } = await T.client.from("playlist_items").select("video_id,position").eq("playlist_id", pl.id).order("position");
+    const ids = (items || []).map(i => i.video_id);
+    const vids = await T.fetchVideos({ ids });
+    const byId = new Map(vids.map(v => [String(v.id), v]));
+    playlistItems = ids.map(id => byId.get(String(id))).filter(Boolean);
+    const idx = playlistItems.findIndex(v => String(v.id) === String(video.id));
+
+    $("playlist-box").hidden = false;
+    $("playlist-box").innerHTML = `
+      <a href="playlist.html?list=${encodeURIComponent(pl.id)}"><strong style="font-size:16px">${T.esc(pl.title)}</strong></a>
+      <div class="muted" style="font-size:12px;margin-bottom:8px">${idx + 1} / ${playlistItems.length}</div>
+      <div class="vlist" style="gap:6px;max-height:340px;overflow:auto">${playlistItems.map((v, i) => `
+        <a href="${T.esc(T.watchUrl(v, "&list=" + encodeURIComponent(pl.id)))}"
+           style="display:flex;gap:8px;padding:6px;border-radius:8px;${i === idx ? "background:var(--surface-2)" : ""}">
+          <span class="muted" style="width:18px">${i === idx ? "▶" : i + 1}</span>
+          <span style="font-size:13px;font-weight:600">${T.esc(v.title)}</span></a>`).join("")}</div>`;
+  }
+
+  /* ---------- البدء ---------- */
+  async function main() {
+    await T.mountShell({ active: "", overlayGuide: true });
+    me = T.state.user;
+
+    if (!T.client) return playerMessage("تعذّر تحميل مكتبة الاتصال.");
+    if (!videoId) return playerMessage("لم يتم تحديد التلاوة.");
+
+    const { data, error } = await T.client.from("videos").select(T.VIDEO_COLUMNS).eq("id", videoId).maybeSingle();
+    if (error) console.error(error);
+    if (!data) {
+      playerMessage("هذه التلاوة غير متاحة.");
+      $("title").textContent = "التلاوة غير متاحة";
+      $("desc").hidden = false;
+      $("desc").innerHTML = "قد تكون التلاوة قيد المراجعة أو حُذفت. تُعرض التلاوات للزوار بعد اعتمادها فقط.";
+      loadUpNextFallback();
+      return;
+    }
+    video = data;
+    document.title = video.title + " | تِبيان";
+    $("title").textContent = video.title;
+
+    if (video.status !== "published") {
+      $("preview").hidden = false;
+      $("preview").textContent = "معاينة خاصة: حالة هذه التلاوة «" + (T.STATUS_LABELS[video.status] || video.status) +
+        "» ولا يراها الزوار حتى تُعتمد.";
+    }
+
+    const state = await T.client.rpc("watch_state", { p_video_id: String(video.id) });
+    ws = state.data || { likes: 0, liked: false, saved: false, comments: 0, channel: null };
+
+    mountPlayer();
+    renderOwner();
+    renderDescription();
+    loadComments();
+    await loadPlaylist();
+    loadUpNext();
+  }
+
+  async function loadUpNextFallback() {
+    nextVideos = await T.fetchVideos({ limit: 15, order: "popular" }).catch(() => []);
+    T.renderVideos($("upnext"), nextVideos, { layout: "compact" });
+  }
+
+  $("like").addEventListener("click", toggleLike);
+  $("share").addEventListener("click", () => T.share(video.title, location.origin + location.pathname + "?v=" + video.id));
+  $("save").addEventListener("click", () => T.openSaveDialog(video));
+
+  main().catch(error => {
+    console.error(error);
+    playerMessage("حدث خطأ غير متوقع أثناء تجهيز التلاوة.");
+  });
+  </script>
+</body>
+</html>

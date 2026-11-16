@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#123f35">
+  <meta name="description" content="تِبيان — منصة الاستماع إلى التلاوات القرآنية ومشاركتها، وكل تلاوة تُراجع قبل نشرها.">
+  <title>الاشتراكات | تِبيان</title>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("tibyan-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e){}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tibyan.css">
+</head>
+<body>
+  <header class="masthead" id="masthead"></header>
+  <nav class="guide" id="guide" aria-label="القائمة الجانبية"></nav>
+  <main class="page" id="page">
+
+    <div id="subs-row" style="display:flex;gap:18px;overflow-x:auto;padding:18px 0 6px"></div>
+    <h2 class="section-title" id="heading">أحدث تلاوات اشتراكاتك</h2>
+    <div class="vgrid" id="grid"></div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="tibyan.js"></script>
+  <script>
+  "use strict";
+
+  const T = window.Tibyan;
+  const $ = id => document.getElementById(id);
+
+  async function main() {
+    await T.mountShell({ active: "subs" });
+    if (!T.state.user) {
+      $("heading").hidden = true;
+      $("grid").innerHTML = T.emptyHTML("لا تفوّت أي تلاوة جديدة",
+        "سجّل الدخول لترى أحدث تلاوات القنوات التي اشتركت فيها.",
+        `<a class="btn brand" href="${T.esc(T.loginUrl())}">تسجيل الدخول</a>`);
+      return;
+    }
+    const subs = T.state.subs;
+    if (!subs.length) {
+      $("heading").hidden = true;
+      $("grid").innerHTML = T.emptyHTML("لم تشترك في أي قناة بعد",
+        "اشترك في قنوات القرّاء لتظهر تلاواتهم الجديدة هنا.",
+        '<a class="btn brand" href="channels.html">تصفّح القنوات</a>');
+      return;
+    }
+    $("subs-row").innerHTML = subs.map(c => `
+      <a href="${T.esc(T.channelUrl(c))}" style="display:grid;justify-items:center;gap:6px;width:84px;text-align:center;font-size:12px">
+        ${T.avatarHTML(c.channel_name, c.avatar, "lg")}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%">${T.esc(c.channel_name)}</span>
+      </a>`).join("");
+    try {
+      const videos = await T.fetchVideos({ userIds: subs.map(c => c.user_id), limit: 60 });
+      await T.renderVideos($("grid"), videos, { emptyTitle: "لا توجد تلاوات جديدة من اشتراكاتك" });
+    } catch (e) {
+      $("grid").innerHTML = T.emptyHTML("تعذّر التحميل", T.friendlyError(e));
+    }
+  }
+  main();
+  </script>
+</body>
+</html>

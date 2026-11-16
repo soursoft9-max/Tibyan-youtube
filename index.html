@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#123f35">
+  <meta name="description" content="تِبيان — منصة الاستماع إلى التلاوات القرآنية ومشاركتها، وكل تلاوة تُراجع قبل نشرها.">
+  <title>الرئيسية | تِبيان</title>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("tibyan-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e){}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tibyan.css">
+</head>
+<body>
+  <header class="masthead" id="masthead"></header>
+  <nav class="guide" id="guide" aria-label="القائمة الجانبية"></nav>
+  <main class="page" id="page">
+
+    <div class="chips" id="chips" role="tablist" aria-label="التصنيفات"></div>
+
+    <div class="ayah-banner" id="banner">
+      <div class="ayah" id="ayah"></div>
+      <div class="ref" id="ayah-ref"></div>
+    </div>
+
+    <h2 class="section-title" id="section-title" hidden></h2>
+    <div class="vgrid" id="grid"></div>
+    <div class="site-foot">تِبيان — منصة قرآنية مستقلة بلا إعلانات، وكل تلاوة تُراجع قبل نشرها.</div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="tibyan.js"></script>
+  <script>
+  "use strict";
+
+  const T = window.Tibyan;
+  const $ = id => document.getElementById(id);
+  const params = new URLSearchParams(location.search);
+
+  let cat = params.get("c") || "all";
+  let sort = params.get("sort") === "popular" ? "popular" : "new";
+  if (cat !== "all" && !T.CATEGORIES.some(c => c.value === cat)) cat = "all";
+
+  const [ayah, ref] = T.randomAyah();
+  $("ayah").textContent = ayah;
+  $("ayah-ref").textContent = ref;
+
+  function renderChips() {
+    const chips = [{ key: "all", label: "الكل" }, { key: "popular", label: "الأكثر استماعًا" }]
+      .concat(T.CATEGORIES.map(c => ({ key: "c:" + c.value, label: c.label })));
+    const activeKey = cat !== "all" ? "c:" + cat : (sort === "popular" ? "popular" : "all");
+    $("chips").innerHTML = chips.map(c =>
+      `<button class="chip ${c.key === activeKey ? "active" : ""}" type="button" role="tab" data-key="${T.esc(c.key)}">${T.esc(c.label)}</button>`
+    ).join("");
+  }
+
+  $("chips").addEventListener("click", e => {
+    const chip = e.target.closest("[data-key]");
+    if (!chip) return;
+    const key = chip.dataset.key;
+    if (key === "all") { cat = "all"; sort = "new"; }
+    else if (key === "popular") { cat = "all"; sort = "popular"; }
+    else { cat = key.slice(2); sort = "new"; }
+
+    const url = new URL(location.href);
+    url.search = "";
+    if (cat !== "all") url.searchParams.set("c", cat);
+    if (sort === "popular") url.searchParams.set("sort", "popular");
+    history.replaceState(null, "", url);
+    renderChips();
+    load();
+  });
+
+  async function load() {
+    const filtered = cat !== "all" || sort === "popular";
+    $("banner").hidden = filtered;
+    $("section-title").hidden = !filtered;
+    $("section-title").textContent = cat !== "all" ? T.categoryLabel(cat) : "الأكثر استماعًا";
+    document.title = (cat !== "all" ? T.categoryLabel(cat) : "الرئيسية") + " | تِبيان";
+
+    $("grid").innerHTML = T.skeletonHTML(12);
+    try {
+      const videos = await T.fetchVideos({
+        categories: cat === "all" ? null : [cat],
+        order: sort,
+        limit: 60
+      });
+      await T.renderVideos($("grid"), videos, {
+        emptyTitle: cat === "all" ? "لا توجد تلاوات منشورة بعد" : "لا توجد تلاوات في هذا التصنيف بعد",
+        emptyText: "تظهر التلاوات هنا بعد مراجعتها واعتمادها.",
+        emptyAction: '<a class="btn brand" href="account.html">شارك تلاوتك</a>'
+      });
+    } catch (error) {
+      console.error(error);
+      $("grid").innerHTML = T.emptyHTML("تعذّر تحميل التلاوات", T.friendlyError(error));
+    }
+  }
+
+  T.mountShell({ active: sort === "popular" && cat === "all" ? "popular" : "home" });
+  renderChips();
+  load();
+  </script>
+</body>
+</html>

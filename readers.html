@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#123f35">
+  <meta name="description" content="تِبيان — منصة الاستماع إلى التلاوات القرآنية ومشاركتها، وكل تلاوة تُراجع قبل نشرها.">
+  <title>القرّاء | تِبيان</title>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("tibyan-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e){}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tibyan.css">
+</head>
+<body>
+  <header class="masthead" id="masthead"></header>
+  <nav class="guide" id="guide" aria-label="القائمة الجانبية"></nav>
+  <main class="page" id="page">
+
+    <div class="page-narrow" style="max-width:1280px">
+      <h1 class="page-title">القرّاء</h1>
+      <p class="page-sub">أسماء القرّاء في التلاوات المنشورة على تِبيان.</p>
+      <input class="input" id="filter" type="search" placeholder="ابحث عن قارئ…" style="max-width:420px;margin-bottom:18px">
+      <div class="cgrid" id="grid"></div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="tibyan.js"></script>
+  <script>
+  "use strict";
+
+  const T = window.Tibyan;
+  const $ = id => document.getElementById(id);
+  let readers = [];
+
+  function render() {
+    const q = T.normalizeText($("filter").value);
+    const list = readers.filter(r => T.normalizeText(r.reader_name).includes(q));
+    $("grid").innerHTML = list.length ? list.map(r => `
+      <a class="ccard" href="results.html?q=${encodeURIComponent(r.reader_name)}">
+        ${T.avatarHTML(r.reader_name.replace(/^(الشيخ|القارئ)\s+/, ""), "", "lg")}
+        <strong>${T.esc(r.reader_name)}</strong>
+        <span>${T.formatCount(r.videos)} تلاوة • ${T.formatViews(r.views)}</span>
+      </a>`).join("")
+      : T.emptyHTML(readers.length ? "لا يوجد قارئ بهذا الاسم" : "لا توجد تلاوات منشورة بعد");
+  }
+
+  async function main() {
+    await T.mountShell({ active: "readers" });
+    const { data, error } = await T.client.rpc("reader_stats");
+    if (error) { $("grid").innerHTML = T.emptyHTML("تعذّر التحميل", T.friendlyError(error)); return; }
+    readers = data || [];
+    render();
+  }
+  $("filter").addEventListener("input", render);
+  main();
+  </script>
+</body>
+</html>

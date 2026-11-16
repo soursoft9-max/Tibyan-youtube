@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#123f35">
+  <meta name="description" content="تِبيان — منصة الاستماع إلى التلاوات القرآنية ومشاركتها، وكل تلاوة تُراجع قبل نشرها.">
+  <title>التصنيفات | تِبيان</title>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("tibyan-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e){}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tibyan.css">
+</head>
+<body>
+  <header class="masthead" id="masthead"></header>
+  <nav class="guide" id="guide" aria-label="القائمة الجانبية"></nav>
+  <main class="page" id="page">
+
+    <div class="page-narrow" style="max-width:1280px">
+      <h1 class="page-title">التصنيفات</h1>
+      <p class="page-sub">اختر ما يناسب وقتك واهتمامك من المحتوى القرآني.</p>
+      <div class="catgrid" id="grid"></div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="tibyan.js"></script>
+  <script>
+  "use strict";
+
+  const T = window.Tibyan;
+  const DESCRIPTIONS = {
+    "القرآن الكريم": "تلاوات السور والآيات",
+    "المصحف المرتل": "ختمات وتلاوات مرتلة",
+    "المصحف المجود": "تلاوات بالتجويد والتغني",
+    "تلاوات خاشعة": "لحظات من السكينة والتدبر",
+    "تجويد": "دروس أحكام التلاوة",
+    "الحفظ والمراجعة": "مواد تعين على الحفظ",
+    "التفسير والتدبر": "فهم المعاني والهدايات",
+    "أذكار": "أذكار وأدعية مأثورة",
+    "أخرى": "محتوى قرآني متنوع"
+  };
+  document.getElementById("grid").innerHTML = T.CATEGORIES.map(c => `
+    <a class="catcard" href="index.html?c=${encodeURIComponent(c.value)}">
+      <div class="art ${c.art}"><div class="art-title">${T.esc(c.label)}</div><div class="art-sub">${T.esc(DESCRIPTIONS[c.value] || "")}</div></div>
+    </a>`).join("");
+  T.mountShell({ active: "categories" });
+  </script>
+</body>
+</html>

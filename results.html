@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#123f35">
+  <meta name="description" content="تِبيان — منصة الاستماع إلى التلاوات القرآنية ومشاركتها، وكل تلاوة تُراجع قبل نشرها.">
+  <title>نتائج البحث | تِبيان</title>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("tibyan-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e){}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tibyan.css">
+</head>
+<body>
+  <header class="masthead" id="masthead"></header>
+  <nav class="guide" id="guide" aria-label="القائمة الجانبية"></nav>
+  <main class="page" id="page">
+
+    <div class="page-narrow">
+      <div class="chips" id="chips">
+        <button class="chip active" data-sort="new" type="button">الأحدث</button>
+        <button class="chip" data-sort="popular" type="button">الأكثر استماعًا</button>
+      </div>
+      <div id="channel-results" class="vlist" style="margin-bottom:22px"></div>
+      <div class="vlist" id="results"></div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="tibyan.js"></script>
+  <script>
+  "use strict";
+
+  const T = window.Tibyan;
+  const $ = id => document.getElementById(id);
+  const q = (new URLSearchParams(location.search).get("q") || "").trim();
+  let sort = "new";
+
+  document.title = (q ? q + " - " : "") + "بحث | تِبيان";
+
+  async function searchChannels() {
+    const s = T.sanitizeSearch(q);
+    if (!s) return;
+    const { data } = await T.client.from("channels")
+      .select("id,user_id,channel_name,description,avatar_url,handle")
+      .eq("status", "approved").ilike("channel_name", "%" + s + "%").limit(3);
+    if (!data || !data.length) return;
+    const [stats, images] = await Promise.all([
+      T.channelStats(data.map(c => c.id)),
+      T.resolveImages(data.map(c => c.avatar_url))
+    ]);
+    $("channel-results").innerHTML = data.map(c => {
+      const st = stats.get(String(c.id)) || {};
+      const href = T.esc(T.channelUrl(c));
+      return `<div class="vrow" style="align-items:center">
+        <a href="${href}" style="display:grid;place-items:center">${T.avatarHTML(c.channel_name, images.get(c.avatar_url), "xl")}</a>
+        <div>
+          <h3 class="vtitle"><a href="${href}">${T.esc(c.channel_name)}</a>${T.VERIFIED}</h3>
+          <div class="vsub">${c.handle ? "@" + T.esc(c.handle) + " • " : ""}${T.formatSubs(st.subscribers)} • ${T.formatCount(st.videos || 0)} تلاوة</div>
+          <div class="vdesc">${T.esc(T.truncate(c.description || "", 160))}</div>
+        </div>
+      </div>`;
+    }).join("") + `<hr style="border:0;border-top:1px solid var(--line);margin:4px 0">`;
+  }
+
+  async function search() {
+    $("results").innerHTML = T.skeletonHTML(6, "list");
+    try {
+      const videos = await T.fetchVideos({ search: q, order: sort, limit: 50 });
+      await T.renderVideos($("results"), videos, {
+        layout: "list",
+        emptyTitle: "لم نعثر على نتائج",
+        emptyText: "جرّب كلمات أخرى، مثل اسم السورة أو اسم القارئ."
+      });
+    } catch (error) {
+      $("results").innerHTML = T.emptyHTML("تعذّر البحث", T.friendlyError(error));
+    }
+  }
+
+  $("chips").addEventListener("click", e => {
+    const chip = e.target.closest("[data-sort]");
+    if (!chip) return;
+    sort = chip.dataset.sort;
+    document.querySelectorAll("#chips .chip").forEach(c => c.classList.toggle("active", c === chip));
+    search();
+  });
+
+  T.mountShell({ active: "results" });
+  if (!q) {
+    $("results").innerHTML = T.emptyHTML("اكتب ما تبحث عنه", "ابحث باسم السورة أو القارئ أو القناة.");
+  } else if (T.client) {
+    searchChannels();
+    search();
+  }
+  </script>
+</body>
+</html>

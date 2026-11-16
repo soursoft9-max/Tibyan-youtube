@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#123f35">
+  <meta name="description" content="تِبيان — منصة الاستماع إلى التلاوات القرآنية ومشاركتها، وكل تلاوة تُراجع قبل نشرها.">
+  <title>القناة | تِبيان</title>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("tibyan-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e){}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tibyan.css">
+</head>
+<body>
+  <header class="masthead" id="masthead"></header>
+  <nav class="guide" id="guide" aria-label="القائمة الجانبية"></nav>
+  <main class="page" id="page">
+
+    <div class="page-narrow" style="max-width:1280px">
+      <div class="channel-banner" id="banner"></div>
+      <div class="channel-head" id="head"></div>
+      <div class="tabs-bar" id="tabs" hidden>
+        <button type="button" data-tab="home" class="active">الرئيسية</button>
+        <button type="button" data-tab="videos">التلاوات</button>
+        <button type="button" data-tab="playlists">قوائم التشغيل</button>
+        <button type="button" data-tab="about">حول</button>
+      </div>
+      <div class="chips" id="sort-chips" hidden style="position:static">
+        <button class="chip active" data-sort="new" type="button">الأحدث</button>
+        <button class="chip" data-sort="popular" type="button">الأكثر استماعًا</button>
+        <button class="chip" data-sort="old" type="button">الأقدم</button>
+      </div>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="tibyan.js"></script>
+  <script>
+  "use strict";
+
+  const T = window.Tibyan;
+  const $ = id => document.getElementById(id);
+  const params = new URLSearchParams(location.search);
+  let channel = null, stats = {}, tab = (location.hash || "#home").slice(1), sort = "new", me = null;
+
+  async function loadChannel() {
+    let q = T.client.from("channels").select("id,user_id,channel_name,description,avatar_url,banner_url,handle,status,created_at");
+    if (params.get("h")) q = q.eq("handle", params.get("h").toLowerCase());
+    else q = q.eq("id", params.get("id") || "-1");
+    const { data } = await q.maybeSingle();
+    return data;
+  }
+
+  function renderHead(avatar, banner) {
+    if (banner) $("banner").innerHTML = `<img src="${T.esc(banner)}" alt="">`;
+    const mine = me && channel.user_id === me.id;
+    const subscribed = stats.subscribed;
+    const action = mine
+      ? `<a class="btn" href="studio.html#customize">${T.icon("edit")}تخصيص القناة</a> <a class="btn" href="studio.html#content">إدارة التلاوات</a>`
+      : `<button class="btn primary subscribe-btn ${subscribed ? "subscribed" : ""}" id="subscribe" type="button">${subscribed ? "مشترك ✓" : "اشترك"}</button>`;
+    $("head").innerHTML = `
+      ${T.avatarHTML(channel.channel_name, avatar, "xl")}
+      <div style="flex:1;min-width:220px">
+        <h1>${T.esc(channel.channel_name)} ${T.VERIFIED}</h1>
+        <div class="meta">${channel.handle ? "@" + T.esc(channel.handle) + " • " : ""}<span id="subs">${T.formatSubs(stats.subscribers)}</span> • ${T.formatCount(stats.videos || 0)} تلاوة</div>
+        <div class="about">${T.esc(channel.description || "")}</div>
+        <div class="actions">${action}</div>
+        ${channel.status !== "approved" ? `<div class="notice error">هذه القناة غير معتمدة حاليًا ولا تظهر للزوار.</div>` : ""}
+      </div>`;
+    const sub = $("subscribe");
+    if (sub) sub.addEventListener("click", toggleSubscribe);
+  }
+
+  async function toggleSubscribe() {
+    if (!me) return T.goLogin("سجّل الدخول للاشتراك في القناة.");
+    const was = stats.subscribed;
+    const q = was
+      ? T.client.from("subscriptions").delete().eq("user_id", me.id).eq("channel_id", channel.id)
+      : T.client.from("subscriptions").insert({ user_id: me.id, channel_id: channel.id });
+    const { error } = await q;
+    if (error) return T.toast(T.friendlyError(error));
+    stats.subscribed = !was;
+    stats.subscribers = Number(stats.subscribers || 0) + (was ? -1 : 1);
+    $("subscribe").classList.toggle("subscribed", stats.subscribed);
+    $("subscribe").textContent = stats.subscribed ? "مشترك ✓" : "اشترك";
+    $("subs").textContent = T.formatSubs(stats.subscribers);
+  }
+
+  async function showTab() {
+    document.querySelectorAll("#tabs [data-tab]").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+    $("sort-chips").hidden = tab !== "videos";
+    const content = $("content");
+
+    if (tab === "about") {
+      content.innerHTML = `<div class="card" style="max-width:760px">
+        <h2>حول القناة</h2>
+        <p style="white-space:pre-wrap">${T.esc(channel.description || "لا يوجد وصف بعد.")}</p>
+        <hr style="border:0;border-top:1px solid var(--line)">
+        <p class="muted">انضمت في ${T.esc(T.formatDate(channel.created_at))}</p>
+        <p class="muted">${T.formatViews(stats.views)} إجمالًا</p>
+        <button class="btn" id="share-channel" type="button">${T.icon("share")}مشاركة القناة</button>
+      </div>`;
+      $("share-channel").onclick = () => T.share(channel.channel_name, location.href.split("#")[0]);
+      return;
+    }
+
+    if (tab === "playlists") {
+      const { data } = await T.client.from("playlists").select("id,title,description,is_public,created_at")
+        .eq("user_id", channel.user_id).eq("is_public", true).order("created_at", { ascending: false });
+      content.innerHTML = (data && data.length)
+        ? `<div class="cgrid">${data.map(p => `<a class="ccard" href="playlist.html?list=${encodeURIComponent(p.id)}">
+            <span class="avatar lg" style="border-radius:16px">${T.icon("playlist")}</span>
+            <strong>${T.esc(p.title)}</strong><span>قائمة تشغيل عامة</span></a>`).join("")}</div>`
+        : T.emptyHTML("لا توجد قوائم تشغيل عامة");
+      return;
+    }
+
+    content.innerHTML = `<div class="vgrid">${T.skeletonHTML(8)}</div>`;
+    try {
+      if (tab === "home") {
+        const [latest, popular] = await Promise.all([
+          T.fetchVideos({ userIds: [channel.user_id], limit: 8 }),
+          T.fetchVideos({ userIds: [channel.user_id], limit: 8, order: "popular" })
+        ]);
+        if (!latest.length) {
+          content.innerHTML = T.emptyHTML("لا توجد تلاوات منشورة بعد", "تظهر تلاوات القناة هنا بعد مراجعتها واعتمادها.");
+          return;
+        }
+        const ctx = await T.buildContext([...latest, ...popular]);
+        content.innerHTML = `
+          <h2 class="section-title">أحدث التلاوات <a href="#videos">عرض الكل</a></h2>
+          <div class="vgrid">${latest.map(v => T.cardHTML(v, ctx)).join("")}</div>
+          ${latest.length > 3 ? `<h2 class="section-title">الأكثر استماعًا</h2>
+          <div class="vgrid">${popular.map(v => T.cardHTML(v, ctx)).join("")}</div>` : ""}`;
+      } else {
+        const videos = await T.fetchVideos({ userIds: [channel.user_id], order: sort });
+        content.innerHTML = `<div class="vgrid" id="grid"></div>`;
+        await T.renderVideos($("grid"), videos, { emptyTitle: "لا توجد تلاوات منشورة بعد" });
+      }
+    } catch (error) {
+      content.innerHTML = T.emptyHTML("تعذّر تحميل التلاوات", T.friendlyError(error));
+    }
+  }
+
+  $("tabs").addEventListener("click", e => {
+    const b = e.target.closest("[data-tab]");
+    if (!b) return;
+    tab = b.dataset.tab;
+    history.replaceState(null, "", "#" + tab);
+    showTab();
+  });
+  window.addEventListener("hashchange", () => { tab = location.hash.slice(1) || "home"; showTab(); });
+  $("sort-chips").addEventListener("click", e => {
+    const c = e.target.closest("[data-sort]");
+    if (!c) return;
+    sort = c.dataset.sort;
+    document.querySelectorAll("#sort-chips .chip").forEach(x => x.classList.toggle("active", x === c));
+    showTab();
+  });
+
+  async function main() {
+    await T.mountShell({ active: "channels" });
+    me = T.state.user;
+    channel = await loadChannel();
+    if (!channel) {
+      $("banner").hidden = true;
+      $("content").innerHTML = T.emptyHTML("القناة غير موجودة", "ربما غُيّر رابطها أو لم تُعتمد بعد.", '<a class="btn" href="channels.html">تصفّح القنوات</a>');
+      return;
+    }
+    document.title = channel.channel_name + " | تِبيان";
+    const [st, images, mySub] = await Promise.all([
+      T.channelStats([channel.id]),
+      T.resolveImages([channel.avatar_url, channel.banner_url]),
+      me ? T.client.from("subscriptions").select("channel_id").eq("user_id", me.id).eq("channel_id", channel.id) : { data: [] }
+    ]);
+    stats = st.get(String(channel.id)) || { subscribers: 0, videos: 0, views: 0 };
+    stats.subscribed = !!(mySub.data && mySub.data.length);
+    renderHead(images.get(channel.avatar_url), images.get(channel.banner_url));
+    $("tabs").hidden = false;
+    if (!["home", "videos", "playlists", "about"].includes(tab)) tab = "home";
+    showTab();
+  }
+  main().catch(e => { console.error(e); $("content").innerHTML = T.emptyHTML("حدث خطأ", T.friendlyError(e)); });
+  </script>
+</body>
+</html>

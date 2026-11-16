@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#123f35">
+  <meta name="description" content="تِبيان — منصة الاستماع إلى التلاوات القرآنية ومشاركتها، وكل تلاوة تُراجع قبل نشرها.">
+  <title>حسابي | تِبيان</title>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("tibyan-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e){}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tibyan.css">
+</head>
+<body>
+  <header class="masthead" id="masthead"></header>
+  <nav class="guide" id="guide" aria-label="القائمة الجانبية"></nav>
+  <main class="page" id="page">
+
+    <div class="page-reading">
+      <h1 class="page-title">حسابي</h1>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="tibyan.js"></script>
+  <script>
+  "use strict";
+
+  const T = window.Tibyan;
+  const $ = id => document.getElementById(id);
+  let me = null;
+
+  function note(id, text, type = "") {
+    const el = $(id);
+    el.hidden = !text;
+    el.className = "notice" + (type ? " " + type : "");
+    el.textContent = text || "";
+  }
+
+  async function renderChannelPart(roles) {
+    const box = $("channel-part");
+    if (roles.has_channel && T.state.myChannel) {
+      const ch = T.state.myChannel;
+      box.innerHTML = `<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+        ${T.avatarHTML(ch.channel_name, ch.avatar, "lg")}
+        <div style="flex:1"><strong style="font-size:17px">${T.esc(ch.channel_name)}</strong> ${T.VERIFIED}
+          <div class="muted">قناتك معتمدة. تُنشر كل تلاوة بعد مراجعتها.</div></div>
+        <div class="actions"><a class="btn" href="${T.esc(T.channelUrl(ch))}">عرض القناة</a>
+          <a class="btn brand" href="studio.html">استوديو تِبيان</a></div></div>`;
+      return;
+    }
+
+    const { data, error } = await T.client.from("channel_requests")
+      .select("id,channel_name,status,admin_note").eq("user_id", me.id).maybeSingle();
+    if (error) { box.innerHTML = `<div class="notice error">${T.esc(T.friendlyError(error))}</div>`; return; }
+
+    if (!data) {
+      box.innerHTML = `<p class="muted">لنشر تلاواتك تحتاج إلى قناة معتمدة. أرسل طلبك وستراجعه الإدارة.</p>
+        <form id="req-form">
+          <div class="field"><label for="ch-name">اسم القناة</label><input id="ch-name" required maxlength="100" placeholder="مثال: قناة القارئ محمد"></div>
+          <div class="field"><label for="ch-desc">نبذة عن القناة والقارئ</label><textarea id="ch-desc" maxlength="1000"></textarea></div>
+          <button class="btn brand" type="submit">إرسال طلب القناة</button>
+          <div id="req-msg" class="notice" hidden></div>
+        </form>`;
+      $("req-form").onsubmit = async e => {
+        e.preventDefault();
+        const { error: err } = await T.client.from("channel_requests").insert({
+          user_id: me.id, channel_name: $("ch-name").value.trim(),
+          description: $("ch-desc").value.trim() || null, status: "pending"
+        });
+        if (err) return note("req-msg", "تعذّر الإرسال: " + T.friendlyError(err), "error");
+        renderChannelPart(roles);
+      };
+      return;
+    }
+
+    if (data.status === "pending") {
+      box.innerHTML = `<div class="notice">طلب قناتك «${T.esc(data.channel_name)}» قيد المراجعة لدى الإدارة.</div>`;
+    } else if (data.status === "rejected") {
+      box.innerHTML = `<div class="notice error">رُفض طلب القناة «${T.esc(data.channel_name)}».${data.admin_note ? " السبب: " + T.esc(data.admin_note) : ""}</div>
+        <button class="btn" id="retry" type="button" style="margin-top:10px">تقديم طلب جديد</button>`;
+      $("retry").onclick = async () => {
+        await T.client.from("channel_requests").delete().eq("id", data.id);
+        renderChannelPart(roles);
+      };
+    } else {
+      box.innerHTML = `<div class="notice success">تمت الموافقة على قناتك. أعد تحميل الصفحة إن لم تظهر.</div>`;
+    }
+  }
+
+  async function main() {
+    await T.mountShell({ active: "account" });
+    me = T.state.user;
+    const roles = T.state.roles || {};
+    if (!me) {
+      $("content").innerHTML = T.emptyHTML("سجّل الدخول إلى تِبيان", "لتشترك في القنوات وتحفظ التلاوات وتنشئ قناتك.",
+        `<div class="actions" style="justify-content:center;margin-top:14px"><a class="btn brand" href="login.html?next=account.html">تسجيل الدخول</a><a class="btn" href="signup.html">إنشاء حساب</a></div>`);
+      return;
+    }
+    if (roles.setupMissing) {
+      $("content").innerHTML = `<div class="notice error">${T.esc(T.friendlyError(roles.error))}</div>`;
+      return;
+    }
+
+    const { data: profile } = await T.client.from("profiles").select("display_name").eq("user_id", me.id).maybeSingle();
+
+    $("content").innerHTML = `
+      <div class="card">
+        <h2>ملفك الشخصي</h2>
+        <p class="muted">البريد: ${T.esc(me.email || "")}</p>
+        <form id="profile-form" class="inline-form">
+          <input id="display-name" maxlength="60" placeholder="اسمك الذي يظهر مع تعليقاتك" value="${T.esc(profile ? profile.display_name || "" : "")}">
+          <button class="btn brand" type="submit">حفظ</button>
+        </form>
+        <small class="muted">إن كانت لديك قناة معتمدة يظهر اسم القناة مع تعليقاتك.</small>
+        <div id="profile-msg" class="notice" hidden></div>
+      </div>
+      <div class="card"><h2>قناتي</h2><div id="channel-part"></div></div>
+      ${(roles.is_volunteer || roles.is_admin) ? `<div class="card"><h2>فريق تِبيان</h2><div class="actions">
+        <a class="btn brand" href="review.html">${T.icon("shield")}مراجعة التلاوات</a>
+        ${roles.is_admin ? `<a class="btn" href="admin.html">${T.icon("settings")}لوحة الإدارة</a>` : ""}</div></div>` : ""}
+      <div class="card"><div class="actions">
+        <a class="btn" href="library.html">${T.icon("library")}مكتبتي</a>
+        <button class="btn danger" id="logout" type="button">${T.icon("logout")}تسجيل الخروج</button></div></div>`;
+
+    $("profile-form").onsubmit = async e => {
+      e.preventDefault();
+      const { error } = await T.client.from("profiles").upsert({ user_id: me.id, display_name: $("display-name").value.trim() || null });
+      note("profile-msg", error ? "تعذّر الحفظ: " + T.friendlyError(error) : "تم الحفظ.", error ? "error" : "success");
+    };
+    $("logout").onclick = async () => { await T.client.auth.signOut(); location.href = "index.html"; };
+    renderChannelPart(roles);
+  }
+  main();
+  </script>
+</body>
+</html>

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#123f35">
+  <meta name="description" content="تِبيان — منصة الاستماع إلى التلاوات القرآنية ومشاركتها، وكل تلاوة تُراجع قبل نشرها.">
+  <title>قائمة تشغيل | تِبيان</title>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("tibyan-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e){}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tibyan.css">
+</head>
+<body>
+  <header class="masthead" id="masthead"></header>
+  <nav class="guide" id="guide" aria-label="القائمة الجانبية"></nav>
+  <main class="page" id="page">
+
+    <div class="pl-layout" id="layout">
+      <div class="pl-hero" id="hero"></div>
+      <div class="pl-items" id="items"></div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="tibyan.js"></script>
+  <script>
+  "use strict";
+
+  const T = window.Tibyan;
+  const $ = id => document.getElementById(id);
+  const listId = new URLSearchParams(location.search).get("list") || "-1";
+  let pl = null, videos = [], me = null;
+
+  async function load() {
+    const { data } = await T.client.from("playlists").select("id,user_id,title,description,is_public,created_at").eq("id", listId).maybeSingle();
+    pl = data;
+    if (!pl) {
+      $("layout").innerHTML = T.emptyHTML("قائمة التشغيل غير متاحة", "قد تكون خاصة أو محذوفة.");
+      return;
+    }
+    document.title = pl.title + " | تِبيان";
+    const { data: items } = await T.client.from("playlist_items").select("video_id,position").eq("playlist_id", pl.id).order("position");
+    const ids = (items || []).map(i => i.video_id);
+    const vids = await T.fetchVideos({ ids });
+    const byId = new Map(vids.map(v => [String(v.id), v]));
+    videos = ids.map(id => byId.get(String(id))).filter(Boolean);
+    render();
+  }
+
+  async function render() {
+    const mine = me && pl.user_id === me.id;
+    const ctx = await T.buildContext(videos);
+    const first = videos[0];
+    const totalSec = videos.reduce((s, v) => s + (v.duration_seconds || 0), 0);
+
+    $("hero").innerHTML = `
+      ${first ? `<a class="thumb" href="${T.esc(T.watchUrl(first, "&list=" + pl.id))}">${T.thumbInner(first, ctx.thumbs.get(String(first.id)))}</a>` : ""}
+      <h1>${T.esc(pl.title)}</h1>
+      <p>${pl.is_public ? "قائمة عامة" : "قائمة خاصة"} • ${videos.length} تلاوة${totalSec ? " • " + T.formatDuration(totalSec) : ""}</p>
+      ${pl.description ? `<p>${T.esc(pl.description)}</p>` : ""}
+      <div class="actions">
+        ${first ? `<a class="btn" style="background:#fff;color:#111" href="${T.esc(T.watchUrl(first, "&list=" + pl.id))}">${T.icon("play")}تشغيل الكل</a>` : ""}
+        <button class="btn" style="background:rgba(255,255,255,.15);color:#fff" id="share" type="button">${T.icon("share")}</button>
+        ${mine ? `<button class="btn" style="background:rgba(255,255,255,.15);color:#fff" id="toggle-public" type="button">${pl.is_public ? "جعلها خاصة" : "جعلها عامة"}</button>
+                  <button class="btn" style="background:rgba(255,255,255,.15);color:#fff" id="rename" type="button">${T.icon("edit")}</button>
+                  <button class="btn" style="background:rgba(255,255,255,.15);color:#fff" id="delete" type="button">${T.icon("trash")}</button>` : ""}
+      </div>`;
+
+    $("items").innerHTML = videos.length ? videos.map((v, i) => `
+      <div class="pl-item">
+        <span class="num">${i + 1}</span>
+        <a class="thumb" href="${T.esc(T.watchUrl(v, "&list=" + pl.id))}">${T.thumbInner(v, ctx.thumbs.get(String(v.id)), { small: true })}</a>
+        <div><h3 class="vtitle" style="font-size:14px"><a href="${T.esc(T.watchUrl(v, "&list=" + pl.id))}">${T.esc(v.title)}</a></h3>
+          <div class="vsub">${T.esc(v.reader_name || "")} • ${T.formatViews(v.view_count)}</div></div>
+        ${mine ? `<button class="icon-btn" type="button" data-remove="${T.esc(v.id)}" aria-label="إزالة">${T.icon("close")}</button>` : "<span></span>"}
+      </div>`).join("") : T.emptyHTML("القائمة فارغة", "أضف تلاوات من زر «حفظ» في صفحة التلاوة.");
+
+    $("share").onclick = () => T.share(pl.title, location.href);
+    if (mine) {
+      $("toggle-public").onclick = async () => {
+        await T.client.from("playlists").update({ is_public: !pl.is_public }).eq("id", pl.id);
+        pl.is_public = !pl.is_public;
+        render();
+      };
+      $("rename").onclick = async () => {
+        const title = prompt("اسم القائمة:", pl.title);
+        if (!title || !title.trim()) return;
+        await T.client.from("playlists").update({ title: title.trim() }).eq("id", pl.id);
+        pl.title = title.trim();
+        render();
+      };
+      $("delete").onclick = async () => {
+        if (!confirm("حذف قائمة التشغيل؟")) return;
+        await T.client.from("playlists").delete().eq("id", pl.id);
+        location.href = "library.html#playlists";
+      };
+      $("items").querySelectorAll("[data-remove]").forEach(b => b.onclick = async () => {
+        await T.client.from("playlist_items").delete().eq("playlist_id", pl.id).eq("video_id", b.dataset.remove);
+        videos = videos.filter(v => String(v.id) !== b.dataset.remove);
+        render();
+      });
+    }
+  }
+
+  async function main() {
+    await T.mountShell({ active: "playlists" });
+    me = T.state.user;
+    await load();
+  }
+  main().catch(e => { console.error(e); $("layout").innerHTML = T.emptyHTML("حدث خطأ", T.friendlyError(e)); });
+  </script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#123f35">
+  <meta name="description" content="تِبيان — منصة الاستماع إلى التلاوات القرآنية ومشاركتها، وكل تلاوة تُراجع قبل نشرها.">
+  <title>عن تِبيان | تِبيان</title>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("tibyan-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e){}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tibyan.css">
+</head>
+<body>
+  <header class="masthead" id="masthead"></header>
+  <nav class="guide" id="guide" aria-label="القائمة الجانبية"></nav>
+  <main class="page" id="page">
+
+    <div class="page-reading prose">
+      <div class="ayah-banner"><div class="ayah">﴿ وَنَزَّلْنَا عَلَيْكَ الْكِتَابَ تِبْيَانًا لِّكُلِّ شَيْءٍ ﴾</div><div class="ref">سورة النحل — ٨٩</div></div>
+      <h1 class="page-title">عن تِبيان</h1>
+      <p>تِبيان منصة عربية مستقلة للاستماع إلى التلاوات القرآنية ومشاركتها: قنوات للقرّاء، واشتراكات،
+        وقوائم تشغيل، وسجلّ استماع، وتعليقات. وكل ذلك في بيئة نقيّة بلا إعلانات ولا موسيقى.</p>
+      <p>ولأن كلام الله أمانة، لا تُنشر أي تلاوة إلا بعد أن يستمع إليها متطوعون مؤهلون ويوافقوا عليها، ثم تعتمدها إدارة تِبيان.</p>
+
+      <h2>كيف تُنشر التلاوة؟</h2>
+      <div class="steps">
+        <div class="step"><strong>قناة معتمدة</strong><span>ينشئ القارئ حسابًا ويطلب قناة، فتعتمدها الإدارة.</span></div>
+        <div class="step"><strong>رفع التلاوة</strong><span>من «استوديو تِبيان»، فتصبح «قيد المراجعة».</span></div>
+        <div class="step"><strong>مراجعة المتطوعين</strong><span>استماع كامل وتصويت بالموافقة أو الرفض مع السبب.</span></div>
+        <div class="step"><strong>اعتماد الإدارة</strong><span>بعد اكتمال الموافقات تُنشر للجميع.</span></div>
+      </div>
+      <p>وأي تعديل على تلاوة منشورة يعيدها إلى المراجعة تلقائيًا.</p>
+
+      <h2>شارك معنا</h2>
+      <div class="actions">
+        <a class="btn brand" href="account.html">اطلب قناتك</a>
+        <a class="btn" href="policy.html">سياسة المحتوى</a>
+      </div>
+      <div class="site-foot">تصميم وتطوير <a href="https://soursoft.om" target="_blank" rel="noopener">سور للبرمجيات</a></div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="tibyan.js"></script>
+  <script>
+  "use strict";
+
+  window.Tibyan.mountShell({ active: "about" });
+  </script>
+</body>
+</html>

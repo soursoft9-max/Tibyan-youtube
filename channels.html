@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#123f35">
+  <meta name="description" content="تِبيان — منصة الاستماع إلى التلاوات القرآنية ومشاركتها، وكل تلاوة تُراجع قبل نشرها.">
+  <title>القنوات | تِبيان</title>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("tibyan-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e){}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tibyan.css">
+</head>
+<body>
+  <header class="masthead" id="masthead"></header>
+  <nav class="guide" id="guide" aria-label="القائمة الجانبية"></nav>
+  <main class="page" id="page">
+
+    <div class="page-narrow" style="max-width:1280px">
+      <h1 class="page-title">قنوات القرّاء</h1>
+      <p class="page-sub">قنوات معتمدة من إدارة تِبيان. اشترك لتصلك تلاواتهم الجديدة.</p>
+      <div class="cgrid" id="grid"></div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="tibyan.js"></script>
+  <script>
+  "use strict";
+
+  const T = window.Tibyan;
+  const $ = id => document.getElementById(id);
+
+  async function main() {
+    await T.mountShell({ active: "channels" });
+    const { data, error } = await T.client.from("channels")
+      .select("id,user_id,channel_name,description,avatar_url,handle")
+      .eq("status", "approved");
+    if (error) { $("grid").innerHTML = T.emptyHTML("تعذّر التحميل", T.friendlyError(error)); return; }
+    const channels = data || [];
+    if (!channels.length) {
+      $("grid").innerHTML = T.emptyHTML("لا توجد قنوات معتمدة بعد", "", '<a class="btn brand" href="account.html">اطلب قناتك</a>');
+      return;
+    }
+    const [stats, images] = await Promise.all([
+      T.channelStats(channels.map(c => c.id)),
+      T.resolveImages(channels.map(c => c.avatar_url))
+    ]);
+    const subscribed = new Set(T.state.subs.map(s => String(s.id)));
+    channels.sort((a, b) => ((stats.get(String(b.id)) || {}).subscribers || 0) - ((stats.get(String(a.id)) || {}).subscribers || 0));
+
+    $("grid").innerHTML = channels.map(c => {
+      const st = stats.get(String(c.id)) || {};
+      return `<a class="ccard" href="${T.esc(T.channelUrl(c))}">
+        ${T.avatarHTML(c.channel_name, images.get(c.avatar_url), "lg")}
+        <strong>${T.esc(c.channel_name)} ${T.VERIFIED}</strong>
+        <span>${c.handle ? "@" + T.esc(c.handle) : ""}</span>
+        <span>${T.formatSubs(st.subscribers)} • ${T.formatCount(st.videos || 0)} تلاوة</span>
+        <p>${T.esc(c.description || "")}</p>
+        <span class="btn ${subscribed.has(String(c.id)) ? "" : "primary"}" style="pointer-events:none">${subscribed.has(String(c.id)) ? "مشترك ✓" : "عرض القناة"}</span>
+      </a>`;
+    }).join("");
+  }
+  main();
+  </script>
+</body>
+</html>

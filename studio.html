@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#123f35">
+  <meta name="description" content="تِبيان — منصة الاستماع إلى التلاوات القرآنية ومشاركتها، وكل تلاوة تُراجع قبل نشرها.">
+  <title>استوديو تِبيان | تِبيان</title>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("tibyan-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e){}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tibyan.css">
+</head>
+<body>
+  <header class="masthead" id="masthead"></header>
+  <nav class="guide" id="guide" aria-label="القائمة الجانبية"></nav>
+  <main class="page" id="page">
+
+    <div class="page-narrow" style="max-width:1200px">
+      <h1 class="page-title">استوديو تِبيان</h1>
+      <div id="gate" class="notice" hidden></div>
+      <div id="studio" hidden>
+        <div class="tabs-bar" id="tabs">
+          <a href="#dashboard" data-tab="dashboard">لوحة القناة</a>
+          <a href="#content" data-tab="content">المحتوى</a>
+          <a href="#upload" data-tab="upload">رفع تلاوة</a>
+          <a href="#customize" data-tab="customize">تخصيص القناة</a>
+        </div>
+
+        <!-- لوحة القناة -->
+        <section data-panel="dashboard">
+          <div class="stats" id="stats"></div>
+          <div class="card">
+            <h2>كيف تُنشر تلاوتك؟</h2>
+            <div class="steps" style="margin:0">
+              <div class="step"><strong>ارفع التلاوة</strong><span>تصبح «قيد المراجعة» ولا يراها الزوار.</span></div>
+              <div class="step"><strong>مراجعة المتطوعين</strong><span>يستمعون إليها ويصوّتون.</span></div>
+              <div class="step"><strong>اعتماد الإدارة</strong><span>بعد اكتمال الموافقات.</span></div>
+              <div class="step"><strong>تُنشر</strong><span>وأي تعديل يعيدها للمراجعة.</span></div>
+            </div>
+          </div>
+          <div class="card"><h2>أحدث تلاواتك</h2><div id="latest" class="vlist"></div></div>
+        </section>
+
+        <!-- المحتوى -->
+        <section data-panel="content">
+          <div class="tabs" id="filters">
+            <button class="tab active" data-filter="all" type="button">الكل</button>
+            <button class="tab" data-filter="published" type="button">منشورة</button>
+            <button class="tab" data-filter="pending" type="button">قيد المراجعة</button>
+            <button class="tab" data-filter="rejected" type="button">مرفوضة</button>
+            <button class="tab" data-filter="draft" type="button">مسودات</button>
+            <a class="btn brand" href="#upload" style="margin-inline-start:auto">${PLUS}رفع تلاوة</a>
+          </div>
+          <div class="card" style="padding:6px 10px"><div class="table-wrap"><table class="studio-table">
+            <thead><tr><th>التلاوة</th><th>الحالة</th><th>المشاهدات</th><th>التاريخ</th><th></th></tr></thead>
+            <tbody id="rows"></tbody>
+          </table></div></div>
+        </section>
+
+        <!-- الرفع -->
+        <section data-panel="upload">
+          <div class="card">
+            <h2 id="form-title">رفع تلاوة جديدة</h2>
+            <form id="video-form">
+              <div class="form-grid">
+                <div class="field"><label for="f-title">عنوان التلاوة *</label><input id="f-title" required maxlength="200" placeholder="مثال: سورة الرحمن كاملة"></div>
+                <div class="field"><label for="f-reader">اسم القارئ *</label><input id="f-reader" required maxlength="150" placeholder="اسم القارئ"></div>
+                <div class="field"><label for="f-category">التصنيف *</label><select id="f-category" required></select></div>
+                <div class="field"><label for="f-mode">بعد الحفظ</label>
+                  <select id="f-mode"><option value="pending">إرسال للمراجعة</option><option value="draft">حفظ كمسودة</option></select></div>
+                <div class="field full"><label for="f-desc">الوصف</label><textarea id="f-desc" maxlength="3000" placeholder="السورة، الآيات، مكان التسجيل… (اختياري)"></textarea></div>
+                <div class="field full"><label for="f-file">ملف الصوت أو الفيديو <span id="file-req">*</span></label>
+                  <input id="f-file" type="file" accept="audio/*,video/*">
+                  <small class="muted" id="file-info">تُقرأ مدة التلاوة تلقائيًا. عند التعديل اتركه فارغًا للاحتفاظ بالملف الحالي.</small></div>
+                <div class="field full"><label for="f-thumb">الصورة المصغرة (اختياري)</label>
+                  <input id="f-thumb" type="file" accept="image/*">
+                  <small class="muted">إن لم تُرفع صورة تُصمَّم لوحة قرآنية تلقائيًا باسم التلاوة والقارئ.</small></div>
+                <div class="field full"><label style="display:flex;gap:8px;align-items:start;font-weight:600">
+                  <input id="f-pledge" type="checkbox" required style="margin-top:6px">
+                  أتعهد بأن التلاوة صحيحة وخالية من الموسيقى، وأن لي حق نشرها، وأوافق على <a href="policy.html" target="_blank" style="color:var(--gold-ink)">سياسة المحتوى</a>.</label></div>
+              </div>
+              <div class="actions">
+                <button class="btn brand" id="save-btn" type="submit">رفع وإرسال للمراجعة</button>
+                <button class="btn" id="cancel-edit" type="button" hidden>إلغاء التعديل</button>
+              </div>
+              <div id="form-msg" class="notice" hidden></div>
+            </form>
+          </div>
+        </section>
+
+        <!-- التخصيص -->
+        <section data-panel="customize">
+          <div class="card" id="customize-card"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="tibyan.js"></script>
+  <script>
+  "use strict";
+
+  const T = window.Tibyan;
+  const $ = id => document.getElementById(id);
+  document.querySelector('[href="#upload"].btn').innerHTML = T.icon("plus") + "رفع تلاوة";
+
+  let me = null, roles = null, channel = null, videos = [], filter = "all", editing = null, saving = false;
+  const PANELS = ["dashboard", "content", "upload", "customize"];
+
+  function msg(id, text, type = "") {
+    const el = $(id);
+    el.hidden = !text;
+    el.className = "notice" + (type ? " " + type : "");
+    el.textContent = text || "";
+  }
+
+  function showPanel() {
+    let tab = location.hash.slice(1);
+    if (!PANELS.includes(tab)) tab = "dashboard";
+    document.querySelectorAll("#tabs [data-tab]").forEach(a => a.classList.toggle("active", a.dataset.tab === tab));
+    document.querySelectorAll("[data-panel]").forEach(s => s.hidden = s.dataset.panel !== tab);
+    if (tab === "customize") renderCustomize();
+  }
+
+  /* ---------- البيانات ---------- */
+  async function loadVideos() {
+    const { data, error } = await T.client.from("videos")
+      .select(T.VIDEO_COLUMNS + ",review_note")
+      .eq("user_id", me.id).order("created_at", { ascending: false });
+    if (error) { T.toast(T.friendlyError(error)); return; }
+    videos = data || [];
+    renderDashboard();
+    renderRows();
+  }
+
+  async function renderDashboard() {
+    const published = videos.filter(v => v.status === "published");
+    let subs = 0;
+    if (channel) {
+      const st = await T.channelStats([channel.id]);
+      subs = (st.get(String(channel.id)) || {}).subscribers || 0;
+    }
+    const cards = [
+      ["المشتركون", T.formatCount(subs)],
+      ["المشاهدات", T.formatCount(published.reduce((s, v) => s + (Number(v.view_count) || 0), 0))],
+      ["منشورة", published.length],
+      ["قيد المراجعة", videos.filter(v => v.status === "pending").length],
+      ["مرفوضة", videos.filter(v => v.status === "rejected").length]
+    ];
+    $("stats").innerHTML = cards.map(([l, v]) => `<div class="stat">${l}<strong>${v}</strong></div>`).join("");
+    const latest = videos.slice(0, 4);
+    if (!latest.length) {
+      $("latest").innerHTML = T.emptyHTML("لم ترفع أي تلاوة بعد", "", '<a class="btn brand" href="#upload">ارفع أول تلاوة</a>');
+      return;
+    }
+    const ctx = await T.buildContext(latest);
+    $("latest").innerHTML = latest.map(v => T.cardHTML(v, ctx, "list", {
+      actions: `<div class="row-actions"><span class="badge ${v.status}">${T.STATUS_LABELS[v.status] || v.status}</span></div>`
+    })).join("");
+  }
+
+  async function renderRows() {
+    const list = videos.filter(v => filter === "all" || v.status === filter);
+    if (!list.length) {
+      $("rows").innerHTML = `<tr><td colspan="5">${T.emptyHTML("لا توجد تلاوات بهذه الحالة")}</td></tr>`;
+      return;
+    }
+    const thumbs = await T.resolveThumbnails(list);
+    $("rows").innerHTML = list.map(v => `
+      <tr data-id="${T.esc(v.id)}">
+        <td><div class="vid">
+          <a class="thumb" href="${T.esc(T.watchUrl(v))}">${T.thumbInner(v, thumbs.get(String(v.id)), { small: true })}</a>
+          <div><div class="vtitle">${T.esc(v.title)}</div>
+            <div class="muted" style="font-size:12px">${T.esc(v.reader_name || "")} • ${T.esc(T.categoryLabel(v.category))}</div>
+            ${v.review_note ? `<div class="note">${v.status === "rejected" ? "سبب الرفض: " : "ملاحظة: "}${T.esc(v.review_note)}</div>` : ""}
+          </div></div></td>
+        <td><span class="badge ${v.status}">${T.STATUS_LABELS[v.status] || v.status}</span></td>
+        <td>${v.status === "published" ? T.formatCount(v.view_count) : "—"}</td>
+        <td class="muted" style="white-space:nowrap">${T.esc(T.formatDate(v.published_at || v.created_at))}</td>
+        <td><div class="actions" style="flex-wrap:nowrap">
+          <button class="btn ghost" data-act="edit" type="button" title="تعديل">${T.icon("edit")}</button>
+          ${["draft", "rejected"].includes(v.status) ? `<button class="btn ghost" data-act="submit" type="button">إرسال للمراجعة</button>` : ""}
+          ${["published", "pending"].includes(v.status) ? `<button class="btn ghost" data-act="draft" type="button">${v.status === "published" ? "إخفاء" : "سحب"}</button>` : ""}
+          <button class="btn ghost" data-act="delete" type="button" title="حذف">${T.icon("trash")}</button>
+        </div></td>
+      </tr>`).join("");
+  }
+
+  $("rows").addEventListener("click", async e => {
+    const btn = e.target.closest("[data-act]");
+    if (!btn) return;
+    const v = videos.find(x => String(x.id) === btn.closest("tr").dataset.id);
+    if (!v) return;
+    const act = btn.dataset.act;
+    if (act === "edit") return startEdit(v);
+    if (act === "delete") {
+      if (!confirm("حذف «" + v.title + "» نهائيًا؟")) return;
+      const { error } = await T.client.from("videos").delete().eq("id", v.id);
+      if (error) return T.toast(T.friendlyError(error));
+      await T.removeFile(v.video_url);
+      await T.removeFile(v.thumbnail_url);
+      T.toast("حُذفت التلاوة");
+      return loadVideos();
+    }
+    const status = act === "submit" ? "pending" : "draft";
+    const { error } = await T.client.from("videos").update({ status }).eq("id", v.id);
+    if (error) return T.toast(T.friendlyError(error));
+    T.toast(status === "pending" ? "أُرسلت للمراجعة" : "أُخفيت التلاوة");
+    loadVideos();
+  });
+
+  $("filters").addEventListener("click", e => {
+    const b = e.target.closest("[data-filter]");
+    if (!b) return;
+    filter = b.dataset.filter;
+    document.querySelectorAll("#filters .tab").forEach(t => t.classList.toggle("active", t === b));
+    renderRows();
+  });
+
+  /* ---------- الرفع والتعديل ---------- */
+  function saveLabel() {
+    const draft = $("f-mode").value === "draft";
+    $("save-btn").textContent = editing
+      ? (draft ? "حفظ التعديلات كمسودة" : "حفظ وإعادة الإرسال للمراجعة")
+      : (draft ? "رفع وحفظ كمسودة" : "رفع وإرسال للمراجعة");
+  }
+
+  function resetForm() {
+    editing = null;
+    $("video-form").reset();
+    $("form-title").textContent = "رفع تلاوة جديدة";
+    $("cancel-edit").hidden = true;
+    $("file-req").hidden = false;
+    saveLabel();
+  }
+
+  function startEdit(v) {
+    editing = v;
+    location.hash = "upload";
+    $("form-title").textContent = "تعديل: " + v.title;
+    $("f-title").value = v.title || "";
+    $("f-reader").value = v.reader_name || "";
+    $("f-category").value = v.category || "";
+    $("f-desc").value = v.description || "";
+    $("f-mode").value = v.status === "draft" ? "draft" : "pending";
+    $("cancel-edit").hidden = false;
+    $("file-req").hidden = true;
+    saveLabel();
+    msg("form-msg", v.status === "published" ? "تنبيه: أي تعديل على تلاوة منشورة يخفيها ويعيدها إلى المراجعة." : "");
+  }
+
+  $("f-file").addEventListener("change", async () => {
+    const f = $("f-file").files[0];
+    if (!f) return;
+    const d = await T.readMediaDuration(f);
+    $("file-info").textContent = `${f.name} — ${(f.size / 1048576).toFixed(1)} ميغابايت${d ? " — المدة " + T.formatDuration(d) : ""}`;
+    if (!$("f-title").value) $("f-title").value = f.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ");
+  });
+  $("f-mode").addEventListener("change", saveLabel);
+  $("cancel-edit").addEventListener("click", () => { resetForm(); msg("form-msg", ""); });
+
+  $("video-form").addEventListener("submit", async e => {
+    e.preventDefault();
+    if (saving) return;
+    const title = $("f-title").value.trim();
+    const reader = $("f-reader").value.trim();
+    const category = $("f-category").value;
+    const description = $("f-desc").value.trim();
+    const status = $("f-mode").value === "draft" ? "draft" : "pending";
+    const file = $("f-file").files[0];
+    const thumb = $("f-thumb").files[0];
+
+    if (!title || !reader || !category) return msg("form-msg", "يرجى تعبئة العنوان واسم القارئ والتصنيف.", "error");
+    if (!editing && !file) return msg("form-msg", "اختر ملف الصوت أو الفيديو.", "error");
+    if (file && !/^(audio|video)\//.test(file.type)) return msg("form-msg", "الملف ليس صوتًا أو فيديو.", "error");
+    if (thumb && !thumb.type.startsWith("image/")) return msg("form-msg", "الصورة المصغرة يجب أن تكون صورة.", "error");
+    if (!$("f-pledge").checked) return msg("form-msg", "يرجى الموافقة على التعهد.", "error");
+
+    saving = true;
+    $("save-btn").disabled = true;
+    let newFile = null, newThumb = null;
+    try {
+      msg("form-msg", file ? "جارٍ رفع الملف… لا تغلق الصفحة." : "جارٍ الحفظ…");
+      const duration = file ? await T.readMediaDuration(file) : null;
+      if (file) newFile = await T.uploadFile(me.id, "videos", file);
+      if (thumb) newThumb = await T.uploadFile(me.id, "thumbnails", thumb);
+
+      const record = { title, reader_name: reader, category, description: description || null, status };
+      if (newFile) { record.video_url = newFile; record.duration_seconds = duration; }
+      if (newThumb) record.thumbnail_url = newThumb;
+      if (editing && editing.status === "published" && status === "pending") delete record.status;
+
+      const result = editing
+        ? await T.client.from("videos").update(record).eq("id", editing.id).select("id").single()
+        : await T.client.from("videos").insert({ ...record, user_id: me.id }).select("id").single();
+      if (result.error) throw result.error;
+
+      if (editing && newFile) await T.removeFile(editing.video_url);
+      if (editing && newThumb) await T.removeFile(editing.thumbnail_url);
+
+      const wasEditing = !!editing;
+      resetForm();
+      msg("form-msg", status === "draft" ? "حُفظت كمسودة."
+        : wasEditing ? "حُفظت التعديلات وأُعيدت التلاوة إلى المراجعة."
+        : "رُفعت التلاوة وهي الآن قيد المراجعة. جزاك الله خيرًا.", "success");
+      await loadVideos();
+    } catch (error) {
+      console.error(error);
+      if (newFile) await T.removeFile(newFile);
+      if (newThumb) await T.removeFile(newThumb);
+      msg("form-msg", "تعذّر الحفظ: " + T.friendlyError(error), "error");
+    } finally {
+      saving = false;
+      $("save-btn").disabled = false;
+    }
+  });
+
+  /* ---------- تخصيص القناة ---------- */
+  async function renderCustomize() {
+    const card = $("customize-card");
+    if (!channel) {
+      card.innerHTML = `<div class="notice">التخصيص متاح لأصحاب القنوات المعتمدة.</div>`;
+      return;
+    }
+    const images = await T.resolveImages([channel.avatar_url, channel.banner_url]);
+    card.innerHTML = `
+      <h2>تخصيص القناة</h2>
+      <div class="channel-banner" style="margin:0 0 14px">${images.get(channel.banner_url) ? `<img src="${T.esc(images.get(channel.banner_url))}" alt="">` : ""}</div>
+      <div style="display:flex;gap:16px;align-items:center;margin-bottom:16px">
+        ${T.avatarHTML(channel.channel_name, images.get(channel.avatar_url), "lg")}
+        <div><strong style="font-size:18px">${T.esc(channel.channel_name)}</strong>
+          <small class="muted">تغيير اسم القناة يتم عبر إدارة تِبيان.</small></div>
+      </div>
+      <form id="custom-form">
+        <div class="form-grid">
+          <div class="field"><label for="c-avatar">صورة القناة (مربعة)</label><input id="c-avatar" type="file" accept="image/*"></div>
+          <div class="field"><label for="c-banner">صورة الغلاف (عريضة 16:4 تقريبًا)</label><input id="c-banner" type="file" accept="image/*"></div>
+          <div class="field"><label for="c-handle">المعرّف (رابط مختصر للقناة)</label>
+            <input id="c-handle" maxlength="30" dir="ltr" placeholder="qari.ahmed" value="${T.esc(channel.handle || "")}">
+            <small class="muted">أحرف إنجليزية صغيرة وأرقام و _ . - ، من 3 إلى 30.</small></div>
+          <div class="field full"><label for="c-desc">وصف القناة</label><textarea id="c-desc" maxlength="1000">${T.esc(channel.description || "")}</textarea></div>
+        </div>
+        <div class="actions"><button class="btn brand" type="submit">حفظ</button>
+          <a class="btn" href="${T.esc(T.channelUrl(channel))}">عرض القناة</a></div>
+        <div id="custom-msg" class="notice" hidden></div>
+      </form>`;
+
+    $("custom-form").onsubmit = async e => {
+      e.preventDefault();
+      const avatar = $("c-avatar").files[0], banner = $("c-banner").files[0];
+      if ((avatar && !avatar.type.startsWith("image/")) || (banner && !banner.type.startsWith("image/"))) {
+        return msg("custom-msg", "يجب اختيار صور فقط.", "error");
+      }
+      try {
+        msg("custom-msg", "جارٍ الحفظ…");
+        const update = { description: $("c-desc").value.trim() || null, handle: $("c-handle").value.trim().toLowerCase() || null };
+        if (avatar) update.avatar_url = await T.uploadFile(me.id, "channel", avatar);
+        if (banner) update.banner_url = await T.uploadFile(me.id, "channel", banner);
+        const { data, error } = await T.client.from("channels").update(update).eq("id", channel.id)
+          .select("id,user_id,channel_name,description,avatar_url,banner_url,handle,status").single();
+        if (error) throw error;
+        if (avatar && channel.avatar_url) await T.removeFile(channel.avatar_url);
+        if (banner && channel.banner_url) await T.removeFile(channel.banner_url);
+        channel = data;
+        await renderCustomize();
+        msg("custom-msg", "حُفظت التغييرات.", "success");
+      } catch (error) {
+        msg("custom-msg", "تعذّر الحفظ: " + (/duplicate|unique/i.test(error.message || "") ? "هذا المعرّف مستخدم." : T.friendlyError(error)), "error");
+      }
+    };
+  }
+
+  /* ---------- البدء ---------- */
+  async function main() {
+    await T.mountShell({ active: "studio" });
+    me = T.state.user;
+    roles = T.state.roles || {};
+    const gate = $("gate");
+    if (!me) {
+      gate.hidden = false;
+      gate.innerHTML = `سجّل الدخول للوصول إلى الاستوديو. <a href="${T.esc(T.loginUrl())}">تسجيل الدخول</a>`;
+      return;
+    }
+    if (roles.setupMissing) { gate.hidden = false; gate.className = "notice error"; gate.textContent = T.friendlyError(roles.error); return; }
+    if (!roles.has_channel && !roles.is_admin) {
+      gate.hidden = false;
+      gate.innerHTML = `الاستوديو متاح لأصحاب القنوات المعتمدة. <a href="account.html">اطلب قناتك من صفحة حسابي</a>.`;
+      return;
+    }
+    channel = T.state.myChannel && T.state.myChannel.status === "approved" ? T.state.myChannel : null;
+    T.fillCategorySelect($("f-category"), { placeholder: "اختر التصنيف" });
+    saveLabel();
+    $("studio").hidden = false;
+    window.addEventListener("hashchange", showPanel);
+    showPanel();
+    loadVideos();
+  }
+  main();
+  </script>
+</body>
+</html>

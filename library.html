@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#123f35">
+  <meta name="description" content="تِبيان — منصة الاستماع إلى التلاوات القرآنية ومشاركتها، وكل تلاوة تُراجع قبل نشرها.">
+  <title>مكتبتي | تِبيان</title>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("tibyan-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e){}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tibyan.css">
+</head>
+<body>
+  <header class="masthead" id="masthead"></header>
+  <nav class="guide" id="guide" aria-label="القائمة الجانبية"></nav>
+  <main class="page" id="page">
+
+    <div class="page-narrow">
+      <h1 class="page-title">مكتبتي</h1>
+      <div class="tabs-bar" id="tabs">
+        <a href="#history" data-tab="history">السجل</a>
+        <a href="#later" data-tab="later">الاستماع لاحقًا</a>
+        <a href="#liked" data-tab="liked">التلاوات التي أعجبتني</a>
+        <a href="#playlists" data-tab="playlists">قوائم التشغيل</a>
+      </div>
+      <div id="tools" class="actions" style="margin-bottom:14px"></div>
+      <div id="content"></div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="tibyan.js"></script>
+  <script>
+  "use strict";
+
+  const T = window.Tibyan;
+  const $ = id => document.getElementById(id);
+  let me = null;
+  const TABS = ["history", "later", "liked", "playlists"];
+
+  function currentTab() {
+    const t = location.hash.slice(1);
+    return TABS.includes(t) ? t : "history";
+  }
+
+  async function videosInOrder(rows, key) {
+    const ids = rows.map(r => r.video_id);
+    const vids = await T.fetchVideos({ ids });
+    const byId = new Map(vids.map(v => [String(v.id), v]));
+    return rows.map(r => ({ v: byId.get(String(r.video_id)), at: r[key] })).filter(x => x.v);
+  }
+
+  async function renderList(items, removeLabel, onRemove) {
+    const content = $("content");
+    if (!items.length) return false;
+    const ctx = await T.buildContext(items.map(x => x.v));
+    content.innerHTML = `<div class="vlist">${items.map(x => T.cardHTML(x.v, ctx, "list", {
+      progress: Number(localStorage.getItem("tibyan-pos-" + x.v.id + "-p") || 0),
+      actions: onRemove ? `<div class="row-actions"><button class="btn ghost" type="button" data-remove="${T.esc(x.v.id)}">${T.icon("close")}${removeLabel}</button></div>` : ""
+    })).join("")}</div>`;
+    if (onRemove) {
+      content.querySelectorAll("[data-remove]").forEach(b => b.addEventListener("click", async () => {
+        await onRemove(b.dataset.remove);
+        show();
+      }));
+    }
+    return true;
+  }
+
+  async function show() {
+    const tab = currentTab();
+    document.querySelectorAll("#tabs [data-tab]").forEach(a => a.classList.toggle("active", a.dataset.tab === tab));
+    document.querySelectorAll("#guide a").forEach(a => a.classList.toggle("active", a.getAttribute("href") === "library.html#" + tab));
+    $("tools").innerHTML = "";
+    $("content").innerHTML = `<div class="vlist">${T.skeletonHTML(4, "list")}</div>`;
+
+    if (tab === "history") {
+      const { data } = await T.client.from("watch_history").select("video_id,watched_at")
+        .eq("user_id", me.id).order("watched_at", { ascending: false }).limit(100);
+      const items = await videosInOrder(data || [], "watched_at");
+      $("tools").innerHTML = items.length ? `<button class="btn" id="clear" type="button">${T.icon("trash")}مسح سجل الاستماع</button>` : "";
+      if ($("clear")) $("clear").onclick = async () => {
+        if (!confirm("مسح سجل الاستماع بالكامل؟")) return;
+        await T.client.from("watch_history").delete().eq("user_id", me.id);
+        show();
+      };
+      const ok = await renderList(items, "إزالة من السجل", id =>
+        T.client.from("watch_history").delete().eq("user_id", me.id).eq("video_id", id));
+      if (!ok) $("content").innerHTML = T.emptyHTML("سجلّك فارغ", "تظهر هنا التلاوات التي استمعت إليها.");
+    }
+
+    if (tab === "later") {
+      const { data } = await T.client.from("watch_later").select("video_id,added_at")
+        .eq("user_id", me.id).order("added_at", { ascending: false });
+      const items = await videosInOrder(data || [], "added_at");
+      const ok = await renderList(items, "إزالة", id =>
+        T.client.from("watch_later").delete().eq("user_id", me.id).eq("video_id", id));
+      if (!ok) $("content").innerHTML = T.emptyHTML("لا توجد تلاوات محفوظة", "استخدم زر «حفظ» في صفحة التلاوة لإضافتها هنا.");
+    }
+
+    if (tab === "liked") {
+      const { data } = await T.client.from("video_likes").select("video_id,created_at")
+        .eq("user_id", me.id).order("created_at", { ascending: false });
+      const items = await videosInOrder(data || [], "created_at");
+      const ok = await renderList(items, "إلغاء الإعجاب", id =>
+        T.client.from("video_likes").delete().eq("user_id", me.id).eq("video_id", id));
+      if (!ok) $("content").innerHTML = T.emptyHTML("لم تُعجب بأي تلاوة بعد");
+    }
+
+    if (tab === "playlists") {
+      const { data } = await T.client.from("playlists").select("id,title,is_public,created_at")
+        .eq("user_id", me.id).order("created_at", { ascending: false });
+      $("tools").innerHTML = `<form class="inline-form" id="new-pl" style="width:100%">
+        <input class="input" id="pl-title" maxlength="120" placeholder="اسم قائمة التشغيل الجديدة" style="flex:1">
+        <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="pl-public"> عامة</label>
+        <button class="btn brand" type="submit">${T.icon("plus")}إنشاء قائمة</button></form>`;
+      $("new-pl").onsubmit = async e => {
+        e.preventDefault();
+        const title = $("pl-title").value.trim();
+        if (!title) return;
+        const { error } = await T.client.from("playlists").insert({ user_id: me.id, title, is_public: $("pl-public").checked });
+        if (error) return T.toast(T.friendlyError(error));
+        show();
+      };
+      $("content").innerHTML = (data && data.length)
+        ? `<div class="cgrid">${data.map(p => `<a class="ccard" href="playlist.html?list=${encodeURIComponent(p.id)}">
+            <span class="avatar lg" style="border-radius:16px">${T.icon("playlist")}</span>
+            <strong>${T.esc(p.title)}</strong><span>${p.is_public ? "عامة" : "خاصة"} • ${T.esc(T.timeAgo(p.created_at))}</span></a>`).join("")}</div>`
+        : T.emptyHTML("لا توجد قوائم تشغيل", "أنشئ قائمة لتجمع فيها تلاواتك المفضلة.");
+    }
+  }
+
+  async function main() {
+    await T.mountShell({ active: currentTab() });
+    me = T.state.user;
+    if (!me) {
+      $("tabs").hidden = true;
+      $("content").innerHTML = T.emptyHTML("استمتع بتلاواتك المفضلة",
+        "سجّل الدخول لترى سجلّك والتلاوات المحفوظة وقوائم التشغيل.",
+        `<a class="btn brand" href="${T.esc(T.loginUrl())}">تسجيل الدخول</a>`);
+      return;
+    }
+    window.addEventListener("hashchange", show);
+    show();
+  }
+  main();
+  </script>
+</body>
+</html>

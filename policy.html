@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#123f35">
+  <meta name="description" content="تِبيان — منصة الاستماع إلى التلاوات القرآنية ومشاركتها، وكل تلاوة تُراجع قبل نشرها.">
+  <title>سياسة المحتوى والمراجعة | تِبيان</title>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("tibyan-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e){}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tibyan.css">
+</head>
+<body>
+  <header class="masthead" id="masthead"></header>
+  <nav class="guide" id="guide" aria-label="القائمة الجانبية"></nav>
+  <main class="page" id="page">
+
+    <div class="page-reading prose">
+      <h1 class="page-title">سياسة المحتوى والمراجعة</h1>
+      <p>كلام الله أمانة، ولذلك لا تُنشر أي تلاوة على تِبيان إلا بعد مراجعتها.</p>
+
+      <h2>مسار النشر</h2>
+      <ol>
+        <li>ينشئ القارئ حسابًا ويقدّم طلب قناة، وتعتمد الإدارة القناة.</li>
+        <li>يرفع صاحب القناة تلاوته من الاستوديو، فتصبح «قيد المراجعة» ولا يراها الزوار.</li>
+        <li>يستمع المتطوعون إلى التلاوة ويصوّتون بالموافقة أو الرفض مع ذكر السبب، ولا يراجع أحد تلاوته.</li>
+        <li>بعد اكتمال العدد المطلوب من الموافقات تتخذ الإدارة القرار النهائي.</li>
+        <li>أي تعديل على تلاوة منشورة (الملف أو العنوان أو الوصف أو الصورة) يعيدها إلى المراجعة.</li>
+      </ol>
+
+      <h2>ما يُقبل</h2>
+      <ul>
+        <li>تلاوات صحيحة خالية من اللحن الجلي، بجودة صوت مناسبة.</li>
+        <li>دروس التجويد والتفسير والتدبر والحفظ، والأذكار المأثورة.</li>
+        <li>عنوان ووصف وتصنيف وصورة مطابقة للمحتوى.</li>
+      </ul>
+
+      <h2>ما يُرفض</h2>
+      <ul>
+        <li>الموسيقى والمؤثرات الصوتية غير اللائقة.</li>
+        <li>الأخطاء الجلية في التلاوة أو التسجيلات غير الواضحة.</li>
+        <li>المحتوى الذي لا يملك صاحبه حق نشره، والإعلانات والترويج التجاري.</li>
+      </ul>
+
+      <h2>التعليقات</h2>
+      <p>التعليقات للكلمة الطيبة والفائدة. يحق لصاحب التلاوة والمراجعين والإدارة حذف أي تعليق مسيء أو خارج عن الموضوع.</p>
+
+      <h2>الخصوصية</h2>
+      <p>بريدك الإلكتروني لتسجيل الدخول فقط ولا يظهر للزوار. سجلّ استماعك وإعجاباتك واشتراكاتك خاصة بك،
+        ويظهر للآخرين عدد الإعجابات والمشتركين فقط. وقوائم التشغيل خاصة ما لم تجعلها عامة.</p>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="tibyan.js"></script>
+  <script>
+  "use strict";
+
+  window.Tibyan.mountShell({ active: "policy" });
+  </script>
+</body>
+</html>
